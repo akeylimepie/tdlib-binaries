@@ -1,0 +1,76 @@
+name: Build and release TDLib
+
+on:
+  workflow_dispatch:
+    inputs:
+      tdlib_version:
+        description: 'TDLib version'
+        required: true
+      tdlib_commit:
+        description: 'TDLib commit'
+        required: true
+
+env:
+  TDLIB_VERSION: ${{ github.event.inputs.tdlib_version }}
+  TDLIB_COMMIT: ${{ github.event.inputs.tdlib_commit }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ 'alpine' ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./docker/${{ matrix.os }}.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            "TDLIB_VERSION=$TDLIB_VERSION"
+            "TDLIB_COMMIT=$TDLIB_COMMIT"
+          outputs: type=local,dest=./output/${{ matrix.os}}
+
+      - run: |
+          mkdir -p ./build
+          
+          find ./output/${{ matrix.os }} -type f -print0 | while read -rd $'\0' file; do
+            dir=${file%/*}
+            arch=${dir##*/}
+            basename=${file##*/}
+          
+            target="./build/${{ matrix.os }}.$arch.tar.gz"
+          
+            tar -czvf "$target" "$file"
+          done
+      - uses: actions/upload-artifact@v3
+        with:
+          name: v${{ env.TDLIB_VERSION }}-${{ matrix.os }}
+          path: ./build/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          path: release
+
+      - name: Release
+        uses: softprops/action-gh-release@v0.1.15
+        with:
+          tag_name: v${{ env.TDLIB_VERSION }}
+          files: |
+            release/*/*
