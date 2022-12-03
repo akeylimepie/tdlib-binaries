@@ -71,6 +71,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v0.1.15
         with:
+          body: 'Source: https://github.com/tdlib/td/tree/${{ env.TDLIB_COMMIT }}'
           tag_name: v${{ env.TDLIB_VERSION }}
           files: |
             release/*/*
